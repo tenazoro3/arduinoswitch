@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Servo Control Panel</title>
+  <style>
+    body {
+      background-color: #222;
+      color: #eee;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 15px;
+      margin: 0;
+      user-select: none;
+    }
+    .panel {
+      background: #333;
+      border: 4px solid #555;
+      border-radius: 12px;
+      padding: 20px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: inset 0 0 10px #000, 0 8px 20px rgba(0,0,0,0.6);
+    }
+    h2 {
+      text-align: center;
+      margin-top: 0;
+      letter-spacing: 2px;
+      color: #ccc;
+      border-bottom: 2px solid #555;
+      padding-bottom: 8px;
+    }
+    
+    /* 7セグ風ディスプレイ */
+    .seg-display {
+      background-color: #111;
+      border: 3px inset #444;
+      color: #f00;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 2.5rem;
+      font-weight: bold;
+      text-align: right;
+      padding: 5px 15px;
+      letter-spacing: 6px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      text-shadow: 0 0 8px rgba(255, 0, 0, 0.7);
+    }
+
+    .section-title {
+      font-size: 0.85rem;
+      color: #aaa;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      border-left: 3px solid #07f;
+      padding-left: 6px;
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 20px;
+    }
+
+    /* コントロール群 */
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 45%;
+      background: #2a2a2a;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+    }
+    
+    .control-group label {
+      font-size: 0.8rem;
+      margin-top: 6px;
+      color: #ddd;
+    }
+
+    /* ツマミ（スライダー代替ビジュアル） */
+    input[type="range"] {
+      width: 80%;
+      margin: 10px 0;
+    }
+
+    /* トグルスイッチ */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 26px;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #555; transition: .3s; border-radius: 26px;
+    }
+    .slider:before {
+      position: absolute; content: ""; height: 18px; width: 18px; left: 4px; bottom: 4px;
+      background-color: white; transition: .3s; border-radius: 50%;
+    }
+    input:checked + .slider { background-color: #2196F3; }
+    input:checked + .slider.danger { background-color: #f44336; }
+    input:checked + .slider:before { transform: translateX(24px); }
+
+    /* BT接続ボタン */
+    .btn-connect {
+      width: 100%;
+      padding: 12px;
+      font-size: 1rem;
+      font-weight: bold;
+      background-color: #008CBA;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-bottom: 15px;
+      box-shadow: 0 4px #005f73;
+    }
+    .btn-connect:active { box-shadow: 0 2px #005f73; transform: translateY(2px); }
+  </style>
+</head>
+<body>
+
+<div class="panel">
+  <h2>SERVO CONTROLLER</h2>
+
+  <button class="btn-connect" id="btnConnect" onclick="toggleConnect()">Bluetooth 接続</button>
+
+  <!-- 7セグ風ディスプレイ -->
+  <div class="seg-display" id="display">0000</div>
+
+  <!-- 仮想スイッチ: HW / BT 優先切替 -->
+  <div class="section-title">Priority Mode</div>
+  <div class="row" style="justify-content: center; align-items: center; gap: 15px; margin-bottom: 20px;">
+    <span>HW</span>
+    <label class="switch">
+      <input type="checkbox" id="swPrio" onchange="sendPriority()">
+      <span class="slider danger"></span>
+    </label>
+    <span>BT (SmartPhone)</span>
+  </div>
+
+  <!-- 軸1 コントロール -->
+  <div class="section-title">AXIS 1</div>
+  <div class="row">
+    <div class="control-group">
+      <label>AMP (振幅)</label>
+      <input type="range" id="potA1Amp" min="0" max="1023" value="0" oninput="onPotChange('A1_AMP', this.value)">
+      <span id="valA1Amp">0</span>
+    </div>
+    <div class="control-group">
+      <label>FREQ (周波数)</label>
+      <input type="range" id="potA1Freq" min="0" max="1023" value="0" oninput="onPotChange('A1_FREQ', this.value)">
+      <span id="valA1Freq">0</span>
+    </div>
+  </div>
+  <div class="row">
+    <div class="control-group">
+      <label>MODE (0:PC / 1:正弦波)</label>
+      <label class="switch">
+        <input type="checkbox" id="swMode1" onchange="sendCmd('MODE1', this.checked ? 1 : 0)">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="control-group">
+      <label>S-ON</label>
+      <label class="switch">
+        <input type="checkbox" id="swSon1" onchange="sendCmd('SON1', this.checked ? 1 : 0)">
+        <span class="slider danger"></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- 軸2 コントロール -->
+  <div class="section-title">AXIS 2</div>
+  <div class="row">
+    <div class="control-group">
+      <label>AMP (振幅)</label>
+      <input type="range" id="potA2Amp" min="0" max="1023" value="0" oninput="onPotChange('A2_AMP', this.value)">
+      <span id="valA2Amp">0</span>
+    </div>
+    <div class="control-group">
+      <label>FREQ (周波数)</label>
+      <input type="range" id="potA2Freq" min="0" max="1023" value="0" oninput="onPotChange('A2_FREQ', this.value)">
+      <span id="valA2Freq">0</span>
+    </div>
+  </div>
+  <div class="row">
+    <div class="control-group">
+      <label>MODE (0:PC / 1:正弦波)</label>
+      <label class="switch">
+        <input type="checkbox" id="swMode2" onchange="sendCmd('MODE2', this.checked ? 1 : 0)">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="control-group">
+      <label>S-ON</label>
+      <label class="switch">
+        <input type="checkbox" id="swSon2" onchange="sendCmd('SON2', this.checked ? 1 : 0)">
+        <span class="slider danger"></span>
+      </label>
+    </div>
+  </div>
+</div>
+
+<script>
+  let bluetoothDevice;
+  let gattCharacteristic;
+
+  // Bluetooth 接続 / 切断
+  async function toggleConnect() {
+    if (gattCharacteristic) {
+      if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+        bluetoothDevice.gatt.disconnect();
+      }
+      gattCharacteristic = null;
+      document.getElementById('btnConnect').innerText = "Bluetooth 接続";
+      document.getElementById('btnConnect').style.backgroundColor = "#008CBA";
+      return;
+    }
+
+    try {
+      bluetoothDevice = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ['00001101-0000-1000-8000-00805f9b34fb', '6e400001-b5a3-f393-e0a9-e50e24dcca9e'] // SPP or Nordic UART
+      });
+      const server = await bluetoothDevice.gatt.connect();
+      // ※通信モジュール(HC-05/HM-10等)に合わせてサービスUUIDおよびキャラクタリスティックUUIDを調整してください
+      const services = await server.getPrimaryServices();
+      const characteristics = await services[0].getCharacteristics();
+      gattCharacteristic = characteristics[0];
+
+      document.getElementById('btnConnect').innerText = "切断";
+      document.getElementById('btnConnect').style.backgroundColor = "#4CAF50";
+    } catch (error) {
+      alert("Bluetooth接続エラー: " + error);
+    }
+  }
+
+  // コマンド送信関数
+  async function sendCmd(param, val) {
+    if (!gattCharacteristic) return;
+    const command = `${param}=${val}\n`;
+    const encoder = new TextEncoder();
+    await gattCharacteristic.writeValue(encoder.encode(command));
+  }
+
+  // 優先スイッチ送信
+  function sendPriority() {
+    const isBtPrio = document.getElementById('swPrio').checked;
+    sendCmd('PRIO', isBtPrio ? 1 : 0);
+  }
+
+  // 可変抵抗値の変更処理
+  function onPotChange(param, val) {
+    // 7セグ風画面の更新
+    document.getElementById('display').innerText = String(val).padStart(4, '0');
+    
+    // 表示数値更新
+    if (param === 'A1_AMP') document.getElementById('valA1Amp').innerText = val;
+    if (param === 'A1_FREQ') document.getElementById('valA1Freq').innerText = val;
+    if (param === 'A2_AMP') document.getElementById('valA2Amp').innerText = val;
+    if (param === 'A2_FREQ') document.getElementById('valA2Freq').innerText = val;
+
+    sendCmd(param, val);
+  }
+</script>
+</body>
+</html>
